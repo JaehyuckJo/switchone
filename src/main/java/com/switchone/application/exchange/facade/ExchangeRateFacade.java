@@ -1,7 +1,113 @@
-package com.switchone.application.exchange.facade;
+    package com.switchone.application.exchange.facade;
 
-import org.springframework.stereotype.Service;
+    import com.switchone.application.exchange.dto.response.ExchangeRateResponse;
+    import com.switchone.domain.exchange.entity.ExchangeRate;
+    import com.switchone.domain.exchange.enumtype.CurrencyCode;
+    import com.switchone.domain.exchange.repository.ExchangeRateRepository;
+    import lombok.RequiredArgsConstructor;
+    import org.springframework.beans.factory.annotation.Value;
+    import org.springframework.core.ParameterizedTypeReference;
+    import org.springframework.stereotype.Service;
+    import org.springframework.transaction.annotation.Transactional;
+    import org.springframework.web.client.RestClient;
 
-@Service
-public class ExchangeRateFacade {
-}
+    import java.math.BigDecimal;
+    import java.math.RoundingMode;
+    import java.time.LocalDate;
+    import java.time.format.DateTimeFormatter;
+    import java.util.Collections;
+    import java.util.EnumSet;
+    import java.util.List;
+    import java.util.Optional;
+
+    @Service
+    @RequiredArgsConstructor
+    public class ExchangeRateFacade {
+
+        private static final DateTimeFormatter SEARCH_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
+        private static final EnumSet<CurrencyCode> TARGET_CURRENCIES =
+                EnumSet.of(CurrencyCode.USD, CurrencyCode.JPY, CurrencyCode.EUR, CurrencyCode.CNY);
+
+        private final RestClient koreaEximRestClient;
+        private final ExchangeRateRepository exchangeRateRepository;
+
+        @Value("${external.koreaexim.auth-key}")
+        private String authKey;
+
+        @Value("${external.koreaexim.data:AP01}")
+        private String dataType;
+
+        @Transactional
+        public void fetchLatestExchangeRates() {
+            String searchDate = LocalDate.now().format(SEARCH_DATE_FORMATTER);
+
+            List<ExchangeRateResponse> responses = koreaEximRestClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/exchangeJSON")
+                            .queryParam("authkey", authKey)
+                            .queryParam("searchdate", searchDate)
+                            .queryParam("data", dataType)
+                            .build())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+
+            List<ExchangeRate> exchangeRates = Optional.ofNullable(responses)
+                    .orElse(Collections.emptyList())
+                    .stream()
+                    .map(this::toExchangeRate)
+                    .flatMap(Optional::stream)
+                    .toList();
+
+            exchangeRateRepository.saveAll(exchangeRates);
+        }
+
+        private Optional<ExchangeRate> toExchangeRate(ExchangeRateResponse response) {
+            CurrencyCode currencyCode = resolveCurrencyCode(response.cur_unit());
+            if (currencyCode == null || !TARGET_CURRENCIES.contains(currencyCode)) {
+                return Optional.empty();
+            }
+
+            return Optional.of(ExchangeRate.create(
+                    currencyCode,
+                    normalizeRate(currencyCode, parseRate(response.ttb())),
+                    normalizeRate(currencyCode, parseRate(response.tts())),
+                    normalizeRate(currencyCode, parseRate(response.deal_bas_r()))
+            ));
+        }
+
+        private CurrencyCode resolveCurrencyCode(String curUnit) {
+            if (curUnit == null || curUnit.isBlank()) {
+                return null;
+            }
+
+            String normalized = curUnit.trim();
+            int suffixIndex = normalized.indexOf('(');
+            String code = suffixIndex > 0 ? normalized.substring(0, suffixIndex).trim() : normalized;
+            if(code.equalsIgnoreCase("CNH")) return CurrencyCode.CNY;
+            try {
+                return CurrencyCode.valueOf(code.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+
+        private BigDecimal parseRate(String rawRate) {
+            if (rawRate == null || rawRate.isBlank()) {
+                return BigDecimal.ZERO;
+            }
+            return new BigDecimal(rawRate.replace(",", ""));
+        }
+
+        private BigDecimal normalizeRate(CurrencyCode currencyCode, BigDecimal rate) {
+            if (currencyCode == CurrencyCode.JPY) {
+                return rate
+                        .divide(BigDecimal.valueOf(100), 10, RoundingMode.DOWN)
+                        .setScale(2, RoundingMode.DOWN);
+            }
+
+            return rate;
+        }
+
+    }
+
+

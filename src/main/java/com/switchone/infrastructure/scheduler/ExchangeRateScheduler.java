@@ -18,7 +18,8 @@ public class ExchangeRateScheduler {
         log.info("환율 갱신 스케줄러 시작");
 
         try {
-
+            exchangeRateFacade.fetchLatestExchangeRates();
+            log.info("환율 갱신 완료");
         } catch (Exception e) {
             log.error("환율 갱신 실패", e);
         }
