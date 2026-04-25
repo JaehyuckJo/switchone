@@ -1,6 +1,7 @@
     package com.switchone.application.exchange.facade;
 
     import com.switchone.application.exchange.dto.response.ExchangeRateResponse;
+    import com.switchone.application.exchange.dto.response.LatestExchangeRateResponse;
     import com.switchone.domain.exchange.entity.ExchangeRate;
     import com.switchone.domain.exchange.enumtype.CurrencyCode;
     import com.switchone.domain.exchange.repository.ExchangeRateRepository;
@@ -39,26 +40,32 @@
 
         @Transactional
         public void fetchLatestExchangeRates() {
-            String searchDate = LocalDate.now().format(SEARCH_DATE_FORMATTER);
+            for (int daysBack = 0; daysBack <= 7; daysBack++) {
+                String searchDate = LocalDate.now().minusDays(daysBack).format(SEARCH_DATE_FORMATTER);
 
-            List<ExchangeRateResponse> responses = koreaEximRestClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/exchangeJSON")
-                            .queryParam("authkey", authKey)
-                            .queryParam("searchdate", searchDate)
-                            .queryParam("data", dataType)
-                            .build())
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<>() {});
+                List<ExchangeRateResponse> responses = koreaEximRestClient.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/exchangeJSON")
+                                .queryParam("authkey", authKey)
+                                .queryParam("searchdate", searchDate)
+                                .queryParam("data", dataType)
+                                .build())
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {});
 
-            List<ExchangeRate> exchangeRates = Optional.ofNullable(responses)
-                    .orElse(Collections.emptyList())
-                    .stream()
-                    .map(this::toExchangeRate)
-                    .flatMap(Optional::stream)
-                    .toList();
+                List<ExchangeRate> exchangeRates = Optional.ofNullable(responses)
+                        .orElse(Collections.emptyList())
+                        .stream()
+                        .filter(r -> Integer.valueOf(1).equals(r.result()))
+                        .map(this::toExchangeRate)
+                        .flatMap(Optional::stream)
+                        .toList();
 
-            exchangeRateRepository.saveAll(exchangeRates);
+                if (!exchangeRates.isEmpty()) {
+                    exchangeRateRepository.saveAll(exchangeRates);
+                    return;
+                }
+            }
         }
 
         private Optional<ExchangeRate> toExchangeRate(ExchangeRateResponse response) {
@@ -69,8 +76,8 @@
 
             return Optional.of(ExchangeRate.create(
                     currencyCode,
-                    normalizeRate(currencyCode, parseRate(response.ttb())),
                     normalizeRate(currencyCode, parseRate(response.tts())),
+                    normalizeRate(currencyCode, parseRate(response.ttb())),
                     normalizeRate(currencyCode, parseRate(response.deal_bas_r()))
             ));
         }
@@ -106,6 +113,35 @@
             }
 
             return rate;
+        }
+
+        @Transactional(readOnly = true)
+        public LatestExchangeRateResponse.ExchangeRateItem getLatestExchangeRate(CurrencyCode currency) {
+            return exchangeRateRepository.findTopByCurrencyOrderByDateTimeDesc(currency)
+                    .map(rate -> new LatestExchangeRateResponse.ExchangeRateItem(
+                            rate.getCurrency(),
+                            rate.getBuyRate(),
+                            rate.getTradeStandardRate(),
+                            rate.getSellRate(),
+                            rate.getDateTime()
+                    ))
+                    .orElseThrow(() -> new IllegalArgumentException("해당 통화의 환율 데이터가 없습니다: " + currency));
+        }
+
+        @Transactional(readOnly = true)
+        public LatestExchangeRateResponse getLatestExchangeRates() {
+            List<LatestExchangeRateResponse.ExchangeRateItem> items = TARGET_CURRENCIES.stream()
+                    .map(currency -> exchangeRateRepository.findTopByCurrencyOrderByDateTimeDesc(currency))
+                    .flatMap(Optional::stream)
+                    .map(rate -> new LatestExchangeRateResponse.ExchangeRateItem(
+                            rate.getCurrency(),
+                            rate.getBuyRate(),
+                            rate.getTradeStandardRate(),
+                            rate.getSellRate(),
+                            rate.getDateTime()
+                    ))
+                    .toList();
+            return new LatestExchangeRateResponse(items);
         }
 
     }

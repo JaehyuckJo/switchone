@@ -1,0 +1,35 @@
+
+### 환율 전체 조회 테스트
+GET http://localhost:8080/exchange-rate/latest
+Content-Type: application/json
+
+
+### 특정 통화 환율 조회 테스트
+GET http://localhost:8080/exchange-rate/latest/CNY
+Content-Type: application/json
+
+### 외화 매수 테스트
+POST http://localhost:8080/order
+Content-Type: application/json
+
+{
+"forexAmount": 200,
+  "fromCurrency": "KRW",
+  "toCurrency": "USD"
+}
+
+
+### 외화 매도 테스트
+POST http://localhost:8080/order
+Content-Type: application/json
+
+{
+  "forexAmount": 133,
+  "fromCurrency": "USD",
+  "toCurrency": "KRW"
+}
+
+
+### 주문 목록 테스트
+GET http://localhost:8080/order/list
+Content-Type: application/json
