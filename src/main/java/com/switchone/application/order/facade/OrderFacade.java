@@ -51,12 +51,12 @@ public class OrderFacade {
 
         if (isBuy) {
             tradeRate = rate.getBuyRate();
-            fromAmount = request.forexAmount().multiply(tradeRate).setScale(0, RoundingMode.FLOOR);
+            fromAmount = calcKrw(request.forexAmount(), tradeRate, forexCurrency);
             toAmount = request.forexAmount();
         } else {
             tradeRate = rate.getSellRate();
             fromAmount = request.forexAmount();
-            toAmount = request.forexAmount().multiply(tradeRate).setScale(0, RoundingMode.FLOOR);
+            toAmount = calcKrw(request.forexAmount(), tradeRate, forexCurrency);
         }
 
         String fromCurrency = request.fromCurrency().toUpperCase();
@@ -65,6 +65,13 @@ public class OrderFacade {
         orderRepository.save(Order.create(fromAmount, fromCurrency, toAmount, toCurrency, tradeRate, rate.getDateTime()));
 
         return new OrderResponse(fromAmount, fromCurrency, toAmount, toCurrency, tradeRate, rate.getDateTime());
+    }
+
+    private BigDecimal calcKrw(BigDecimal forexAmount, BigDecimal rate, CurrencyCode currency) {
+        BigDecimal effectiveRate = (currency == CurrencyCode.JPY)
+                ? rate.divide(BigDecimal.valueOf(100), 10, RoundingMode.DOWN)
+                : rate;
+        return forexAmount.multiply(effectiveRate).setScale(0, RoundingMode.FLOOR);
     }
 
     @Transactional(readOnly = true)

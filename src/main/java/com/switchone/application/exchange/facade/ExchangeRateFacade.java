@@ -78,9 +78,9 @@
 
             return Optional.of(ExchangeRate.create(
                     currencyCode,
-                    normalizeRate(currencyCode, parseRate(response.tts())),
-                    normalizeRate(currencyCode, parseRate(response.ttb())),
-                    normalizeRate(currencyCode, parseRate(response.deal_bas_r()))
+                    parseRate(response.tts()),
+                    parseRate(response.ttb()),
+                    parseRate(response.deal_bas_r())
             ));
         }
 
@@ -105,16 +105,6 @@
                 return BigDecimal.ZERO;
             }
             return new BigDecimal(rawRate.replace(",", ""));
-        }
-
-        private BigDecimal normalizeRate(CurrencyCode currencyCode, BigDecimal rate) {
-            if (currencyCode == CurrencyCode.JPY) {
-                return rate
-                        .divide(BigDecimal.valueOf(100), 10, RoundingMode.DOWN)
-                        .setScale(2, RoundingMode.DOWN);
-            }
-
-            return rate;
         }
 
         @Transactional(readOnly = true)

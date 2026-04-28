@@ -2,6 +2,8 @@ package com.switchone.presentation.exchange;
 
 import com.switchone.application.exchange.dto.response.LatestExchangeRateResponse;
 import com.switchone.application.exchange.facade.ExchangeRateFacade;
+import com.switchone.common.exception.BusinessException;
+import com.switchone.common.exception.ErrorCode;
 import com.switchone.common.response.ApiResponse;
 import com.switchone.domain.exchange.enumtype.CurrencyCode;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,12 @@ public class ExchangeController {
     @GetMapping("/latest/{currency}")
     public ResponseEntity<ApiResponse<LatestExchangeRateResponse.ExchangeRateItem>> getLatestExchangeRate(
             @PathVariable String currency) {
-
-        return ResponseEntity.ok(ApiResponse.ok(exchangeRateFacade.getLatestExchangeRate(CurrencyCode.valueOf(currency.toUpperCase()))));
+        CurrencyCode currencyCode;
+        try {
+            currencyCode = CurrencyCode.valueOf(currency.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_CURRENCY);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(exchangeRateFacade.getLatestExchangeRate(currencyCode)));
     }
 }
