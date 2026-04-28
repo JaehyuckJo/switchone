@@ -25,7 +25,8 @@ public class ExchangeController {
 
     @GetMapping("/latest/{currency}")
     public ResponseEntity<ApiResponse<LatestExchangeRateResponse.ExchangeRateItem>> getLatestExchangeRate(
-            @PathVariable CurrencyCode currency) {
-        return ResponseEntity.ok(ApiResponse.ok(exchangeRateFacade.getLatestExchangeRate(currency)));
+            @PathVariable String currency) {
+
+        return ResponseEntity.ok(ApiResponse.ok(exchangeRateFacade.getLatestExchangeRate(CurrencyCode.valueOf(currency.toUpperCase()))));
     }
 }
