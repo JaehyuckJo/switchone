@@ -6,6 +6,8 @@ import com.switchone.application.order.dto.response.OrderResponse;
 import com.switchone.domain.exchange.entity.ExchangeRate;
 import com.switchone.domain.exchange.enumtype.CurrencyCode;
 import com.switchone.domain.exchange.repository.ExchangeRateRepository;
+import com.switchone.common.exception.BusinessException;
+import com.switchone.common.exception.ErrorCode;
 import com.switchone.domain.order.entity.Order;
 import com.switchone.domain.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,13 +27,23 @@ public class OrderFacade {
 
     @Transactional
     public OrderResponse order(OrderRequest request) {
-        boolean isBuy = "KRW".equalsIgnoreCase(request.fromCurrency());
+        boolean fromKrw = "KRW".equalsIgnoreCase(request.fromCurrency());
+        boolean toKrw = "KRW".equalsIgnoreCase(request.toCurrency());
+        if (fromKrw == toKrw) {
+            throw new BusinessException(ErrorCode.INVALID_CURRENCY_PAIR);
+        }
 
+        boolean isBuy = fromKrw;
         String forexCurrencyStr = isBuy ? request.toCurrency() : request.fromCurrency();
-        CurrencyCode forexCurrency = CurrencyCode.valueOf(forexCurrencyStr.toUpperCase());
+        CurrencyCode forexCurrency;
+        try {
+            forexCurrency = CurrencyCode.valueOf(forexCurrencyStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_CURRENCY);
+        }
 
         ExchangeRate rate = exchangeRateRepository.findTopByCurrencyOrderByDateTimeDesc(forexCurrency)
-                .orElseThrow(() -> new IllegalArgumentException("해당 통화의 환율 데이터가 없습니다: " + forexCurrency));
+                .orElseThrow(() -> new BusinessException(ErrorCode.EXCHANGE_RATE_NOT_FOUND));
 
         BigDecimal fromAmount;
         BigDecimal toAmount;

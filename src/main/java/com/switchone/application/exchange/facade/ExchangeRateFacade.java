@@ -2,6 +2,8 @@
 
     import com.switchone.application.exchange.dto.response.ExchangeRateResponse;
     import com.switchone.application.exchange.dto.response.LatestExchangeRateResponse;
+    import com.switchone.common.exception.BusinessException;
+    import com.switchone.common.exception.ErrorCode;
     import com.switchone.domain.exchange.entity.ExchangeRate;
     import com.switchone.domain.exchange.enumtype.CurrencyCode;
     import com.switchone.domain.exchange.repository.ExchangeRateRepository;
@@ -125,7 +127,7 @@
                             rate.getSellRate(),
                             rate.getDateTime()
                     ))
-                    .orElseThrow(() -> new IllegalArgumentException("해당 통화의 환율 데이터가 없습니다: " + currency));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.EXCHANGE_RATE_NOT_FOUND));
         }
 
         @Transactional(readOnly = true)
